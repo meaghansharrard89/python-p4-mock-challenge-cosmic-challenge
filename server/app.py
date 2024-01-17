@@ -20,7 +20,8 @@ migrate = Migrate(app, db)
 
 db.init_app(app)
 
-api = Api(app=app)
+api = Api(app)
+
 
 @app.route('/')
 def home():
@@ -28,8 +29,9 @@ def home():
 
 class Scientists(Resource):
     def get(self):
-        return make_response([scientist.to_dict() for scientist in Scientist.query.all()], 200)
-
+        scientists = [scientist.to_dict(only=("id", "name", "field_of_study",)) for scientist in Scientist.query.all()]
+        return make_response(scientists, 200)
+    
     def post(self):
         data = request.get_json()
         scientist = Scientist()
@@ -41,42 +43,45 @@ class Scientists(Resource):
             return make_response(scientist.to_dict(), 201)
         except ValueError:
             return make_response({"errors": ["validation errors"]}, 400)
+    
+api.add_resource(Scientists, "/scientists")
 
-api.add_resource(Scientists, '/scientists')
-
-class ScientistById(Resource):
+class ScientistsById(Resource):
     def get(self, id):
-        scientist = Scientist.query.get(id)
-        if not scientist:
-            return make_response({"error": "Scientist not found"}, 404)
-        return make_response(scientist.to_dict(rules=("missions", "-missions.planet")), 200)
+            scientist = Scientist.query.filter(Scientist.id == id).first()
+            if scientist is None:
+                 return make_response({"error": "Scientist not found"}, 404)          
+            return make_response(scientist.to_dict(), 200)
     
     def patch(self, id):
-        scientist = Scientist.query.get(id)
-        if not scientist:
-            return make_response({"error": "Scientist not found"}, 404)
-        data = request.get_json()
-        try:
-            for attr in data:
-                setattr(scientist, attr, data[attr])
-            db.session.add(scientist)
-            db.session.commit()
-            return make_response(scientist.to_dict(), 202)
-        except ValueError:
-            return make_response({"errors": ["validation errors"]}, 400)
-        
+         scientist = Scientist.query.filter(Scientist.id == id).first()
+         if not scientist:
+              return make_response({"error": "Scientist not found"}, 404)
+         data = request.get_json()
+         try:
+              setattr(scientist, "name", data["name"])
+              setattr(scientist, "field_of_study", data["field_of_study"])
+              db.session.add(scientist)
+              db.session.commit()
+              return scientist.to_dict(only=("id", "name", "field_of_study",)), 202
+         except ValueError:
+              return make_response({"errors": ["validation errors"]}, 400)
+         
     def delete(self, id):
-        scientist = Scientist.query.get(id)
-        if not scientist:
-            return make_response({"error": "Scientist not found"}, 404)
-        db.session.delete(scientist)
-        return make_response({}, 204)    
+         scientist = Scientist.query.filter(Scientist.id == id).first()
+         if scientist:
+              db.session.delete(scientist)
+              db.session.commit()
+              return make_response({}, 204)
+         return make_response({"error": "Scientist not found"}, 404)
+                                   
     
-api.add_resource(ScientistById, '/scientists/<int:id>')
+api.add_resource(ScientistsById, "/scientists/<int:id>")
 
 class Planets(Resource):
     def get(self):
-        return make_response([planet.to_dict() for planet in Planet.query.all()], 200)
+        planets = [planet.to_dict(only=("id", "name", "distance_from_earth", "nearest_star",)) for planet in Planet.query.all()]
+        return make_response(planets, 200)
     
 api.add_resource(Planets, "/planets")
 
@@ -90,10 +95,11 @@ class Missions(Resource):
             mission.scientist_id = data.get("scientist_id")
             db.session.add(mission)
             db.session.commit()
-            return make_response(mission.to_dict(rules=("planet", "scientist")), 201)
+            return make_response(mission.to_dict(), 201)
         except ValueError:
             return make_response({"errors": ["validation errors"]}, 400)   
-    
+
+
 api.add_resource(Missions, "/missions")
 
 

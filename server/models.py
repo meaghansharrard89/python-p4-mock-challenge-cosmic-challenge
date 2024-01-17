@@ -27,12 +27,16 @@ class Planet(db.Model, SerializerMixin):
 
     # Add relationship
 
-    missions = db.relationship('Mission', back_populates='planet', cascade='all, delete-orphan')
-    scientists = association_proxy('missions', 'scientist')
+    missions = db.relationship(
+        "Mission", back_populates="planet", cascade="all, delete-orphan"
+    )
 
     # Add serialization rules
 
-    serialize_rules = ("-missions",)
+    serialize_rules = ("-missions.planet",)
+
+    def __repr__(self):
+        return f"<Planet {self.id}: {self.name}>"
 
 
 class Scientist(db.Model, SerializerMixin):
@@ -44,20 +48,30 @@ class Scientist(db.Model, SerializerMixin):
 
     # Add relationship
 
-    missions = db.relationship('Mission', back_populates='scientist', cascade='all, delete-orphan')
-    planets = association_proxy('missions', 'planet')
+    missions = db.relationship(
+        "Mission", back_populates="scientist", cascade="all, delete-orphan"
+    )
 
     # Add serialization rules
 
-    serialize_rules = ("-missions",)
+    serialize_rules = ("-missions.scientist",)
 
     # Add validation
 
-    @validates('name', 'field_of_study')
-    def validates_name(self, key, value):
+    @validates("name")
+    def validate_name(self, key, value):
         if not value:
-            raise ValueError(f"Scientists must have a {key}.")
+            raise ValueError("Scientist must have a name.")
         return value
+    
+    @validates("field_of_study")
+    def validate_field_of_study(self, key, value):
+        if not value:
+            raise ValueError("Scientist must have a field of study.")
+        return value
+    
+    def __repr__(self):
+        return f"<Scientist {self.id}: {self.name}>"
 
 
 class Mission(db.Model, SerializerMixin):
@@ -65,24 +79,36 @@ class Mission(db.Model, SerializerMixin):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String)
-    planet_id = db.Column(db.Integer, db.ForeignKey('planets.id'))
-    scientist_id = db.Column(db.Integer, db.ForeignKey('scientists.id'))
 
     # Add relationships
+
+    planet_id = db.Column(db.Integer, db.ForeignKey("planets.id"))
+    scientist_id = db.Column(db.Integer, db.ForeignKey("scientists.id"))
 
     planet = db.relationship("Planet", back_populates="missions")
     scientist = db.relationship("Scientist", back_populates="missions")
 
     # Add serialization rules
 
-    serialize_rules = ("-scientist", "-planet")
+    serialize_rules = ("-planet.missions", "-scientist.missions")
 
     # Add validation
-
-    @validates('name', 'scientist_id', 'planet_id')
-    def validates_presence(self, key, value):
+    @validates("name")
+    def validate_name(self, key, value):
         if not value:
-            raise ValueError(f"Missions must have a {key}.")
+            raise ValueError("Mission must have a name.")
+        return value
+    
+    @validates("scientist_id")
+    def validate_scientist_id(self, key, value):
+        if not value:
+            raise ValueError("Scientist must exist.")
+        return value
+    
+    @validates("planet_id")
+    def validate_planet_id(self, key, value):
+        if not value:
+            raise ValueError("Planet must exist.")
         return value
 
 
